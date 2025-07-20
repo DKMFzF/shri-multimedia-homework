@@ -6,7 +6,6 @@
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0" />
     <title>Stories</title>
-
     <link rel="stylesheet" href="http://localhost:3000/index.css" />
 </head>
 
@@ -21,58 +20,295 @@
                 d="M12 1.25C6.06294 1.25 1.25 6.06294 1.25 12C1.25 17.9371 6.06294 22.75 12 22.75C17.9371 22.75 22.75 17.9371 22.75 12C22.75 6.06294 17.9371 1.25 12 1.25ZM2.75 12C2.75 6.89137 6.89137 2.75 12 2.75C17.1086 2.75 21.25 6.89137 21.25 12C21.25 17.1086 17.1086 21.25 12 21.25C6.89137 21.25 2.75 17.1086 2.75 12Z" />
         </svg>
     </div>
-    <div class="progress">
-        <!-- script inserted progress-bars -->
+
+    <div class="progress" id="progress-container">
     </div>
-    <div class="stories" onclick="togglePlay()">
-        <!-- script inserted stories -->
+    <div class="stories" id="stories-container">
     </div>
     <button class="show-reactions-btn">👍</button>
     <div class="controls">
         <div class="controls__buttons">
-            <button onclick="prev()" class="button">
+            <button class="button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L9.83 12l5.58-5.59z" />
                 </svg>
             </button>
-            <button onclick="next()" class="button button_next">
+            <button class="button button_next">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L9.83 12l5.58-5.59z" />
                 </svg>
             </button>
         </div>
     </div>
+
+    <div class="stop-screen" id="reactions-container" style="display: none; z-index: 20;">
+        <div class="stop-screen__plate" style="background-color: rgba(0,0,0,0.7);">
+            <div class="reactions-panel">
+                <button class="reaction-btn" onclick="addReaction('👍')">👍</button>
+                <button class="reaction-btn" onclick="addReaction('❤️')">❤️</button>
+                <button class="reaction-btn" onclick="addReaction('😂')">😂</button>
+                <button class="reaction-btn" onclick="addReaction('😮')">😮</button>
+                <button class="reaction-btn" onclick="addReaction('😢')">😢</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     const videosSrc = [
-        'http://localhost:3000/assets/1.mp4',
-        'http://localhost:3000/assets/2.mp4',
-        'http://localhost:3000/assets/3.mp4',
-        'http://localhost:3000/assets/4.mp4',
-        'http://localhost:3000/assets/5.mp4',
-    ];
+    'http://localhost:3000/assets/1.mp4',
+    'http://localhost:3000/assets/2.mp4',
+    'http://localhost:3000/assets/3.mp4',
+    'http://localhost:3000/assets/4.mp4',
+    'http://localhost:3000/assets/5.mp4',
+];
 
-    <!-- write your code here -->
+const slider = document.getElementById('stories-container');
+const progressContainer = document.getElementById('progress-container');
+const stopScreen = document.querySelector('.stop-screen');
+const showReactionsBtn = document.querySelector('.show-reactions-btn');
+const prevBtn = document.querySelector('.button:not(.button_next)');
+const nextBtn = document.querySelector('.button_next');
+const reactionsContainer = document.getElementById('reactions-container');
 
-    function initStory(id, src) {
-        slider.insertAdjacentHTML(
-            'beforeend',
-            `<div class="stories__story">
-                <video id="video-${id}" class="stories__video" src="${src}"></video>
-            </div>`,
-        );
+let currentStoryIndex = 0;
+let stories = [];
+let progressBars = [];
+let isPlaying = false;
+let progressInterval;
+let videoDurations = [];
+let reactions = Array(videosSrc.length).fill(null);
 
-        progressContainer.insertAdjacentHTML(
-            'beforeend',
-            `<span class="progress__bar">
-                <span id="progress-${id}" class="progress__bar-value"></span>
-            </span>`,
-        );
+function init() {
+    videosSrc.forEach((src, index) => {
+        const story = initStory(index, src);
+        stories.push(story);
+        progressBars.push(document.getElementById(`progress-${index}`));
+    });
+    
+    loadDurations().then(() => {
+        showStory(0);
+        stopScreen.classList.add('active');
+    });
+    
+    setupEventListeners();
+}
 
-        return getStory(id);
+function setupEventListeners() {
+    slider.addEventListener('click', (e) => {
+        if (!e.target.closest('.button') && !e.target.closest('.progress') && !e.target.closest('.show-reactions-btn')) {
+            togglePlay();
+        }
+    });
+    
+    prevBtn.addEventListener('click', prev);
+    nextBtn.addEventListener('click', next);
+    
+    showReactionsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleReactions();
+    });
+    
+    reactionsContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('stop-screen__plate')) {
+            toggleReactions();
+        }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') next();
+        else if (e.key === 'ArrowLeft') prev();
+        else if (e.key === ' ') togglePlay();
+    });
+}
+
+function toggleReactions() {
+    if (reactionsContainer.style.display === 'none') {
+        reactionsContainer.style.display = 'flex';
+        const { video } = stories[currentStoryIndex];
+        if (!video.paused) {
+            video.pause();
+            clearInterval(progressInterval);
+            isPlaying = false;
+            stopScreen.classList.add('active');
+        }
+    } else {
+        reactionsContainer.style.display = 'none';
     }
+}
+
+async function loadDurations() {
+    const promises = videosSrc.map(src => {
+        return new Promise(resolve => {
+            const video = document.createElement('video');
+            video.src = src;
+            video.onloadedmetadata = () => {
+                resolve(video.duration);
+            };
+        });
+    });
+    
+    videoDurations = await Promise.all(promises);
+}
+
+function initStory(id, src) {
+    slider.insertAdjacentHTML(
+        'beforeend',
+        `<div class="stories__story">
+            <video id="video-${id}" class="stories__video" src="${src}"></video>
+        </div>`,
+    );
+
+    progressContainer.insertAdjacentHTML(
+        'beforeend',
+        `<div class="progress__bar">
+            <span id="progress-${id}" class="progress__bar-value"></span>
+        </div>`,
+    );
+
+    return getStory(id);
+}
+
+function getStory(index) {
+    const video = document.getElementById(`video-${index}`);
+    const storyElement = video.parentElement;
+    return { video, storyElement };
+}
+
+function showStory(index) {
+    stories.forEach((story, i) => {
+        if (i === index) {
+            story.storyElement.style.display = 'flex';
+        } else {
+            story.storyElement.style.display = 'none';
+        }
+        story.video.pause();
+    });
+    
+    currentStoryIndex = index;
+    
+    progressBars.forEach(bar => {
+        bar.style.transform = 'scaleX(0)';
+    });
+    
+    if (isPlaying) {
+        playCurrentVideo();
+    }
+}
+
+function playCurrentVideo() {
+    const { video } = stories[currentStoryIndex];
+    video.currentTime = 0;
+    video.play()
+        .then(() => {
+            isPlaying = true;
+            stopScreen.classList.remove('active');
+            reactionsContainer.style.display = 'none';
+            startProgress();
+        })
+        .catch(e => console.error('Error playing video:', e));
+}
+
+function startProgress() {
+    clearInterval(progressInterval);
+    
+    const duration = videoDurations[currentStoryIndex];
+    const startTime = Date.now();
+    const endTime = startTime + duration * 1000;
+    
+    progressInterval = setInterval(() => {
+        const currentTime = Date.now();
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / (duration * 1000), 1);
+        
+        progressBars[currentStoryIndex].style.transform = `scaleX(${progress})`;
+        
+        if (progress >= 1) {
+            clearInterval(progressInterval);
+            if (currentStoryIndex < stories.length - 1) {
+                next();
+            } else {
+                isPlaying = false;
+                stopScreen.classList.add('active');
+            }
+        }
+    }, 50);
+}
+
+function togglePlay() {
+    const { video } = stories[currentStoryIndex];
+    
+    if (isPlaying) {
+        video.pause();
+        clearInterval(progressInterval);
+        stopScreen.classList.add('active');
+        isPlaying = false;
+    } else {
+        video.play();
+        startProgress();
+        stopScreen.classList.remove('active');
+        reactionsContainer.style.display = 'none';
+        isPlaying = true;
+    }
+}
+
+function addReaction(reaction) {
+    reactions[currentStoryIndex] = reaction;
+    toggleReactions();
+    
+    const flyingReaction = document.createElement('div');
+    flyingReaction.textContent = reaction;
+    flyingReaction.style.position = 'fixed';
+    flyingReaction.style.fontSize = '30px';
+    flyingReaction.style.left = `${Math.random() * 80 + 10}%`;
+    flyingReaction.style.bottom = '100px';
+    flyingReaction.style.animation = 'fly 1.5s ease-in forwards';
+    flyingReaction.style.pointerEvents = 'none';
+    flyingReaction.style.zIndex = '1000';
+    
+    document.body.appendChild(flyingReaction);
+    
+    setTimeout(() => {
+        flyingReaction.remove();
+    }, 1500);
+}
+
+function next() {
+    if (currentStoryIndex < stories.length - 1) {
+        const currentVideo = stories[currentStoryIndex].video;
+        currentVideo.pause();
+        clearInterval(progressInterval);
+        
+        currentStoryIndex++;
+        showStory(currentStoryIndex);
+        playCurrentVideo();
+    }
+}
+
+function prev() {
+    if (currentStoryIndex > 0) {
+        const currentVideo = stories[currentStoryIndex].video;
+        currentVideo.pause();
+        clearInterval(progressInterval);
+        
+        currentStoryIndex--;
+        showStory(currentStoryIndex);
+        playCurrentVideo();
+    }
+}
+
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fly {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
+
+init();
 </script>
+
 </body>
 
 </html>

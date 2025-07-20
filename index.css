@@ -10,7 +10,6 @@ body {
 }
 
 .root {
-    display: flex;
     justify-content: center;
     max-width: 450px;
     width: 100%;
@@ -41,6 +40,7 @@ body {
 }
 
 .controls {
+    z-index: 228;
     display: flex;
 
     position: absolute;
@@ -167,6 +167,10 @@ body {
     display: none;
 }
 
+.stop-screen:not(.active) {
+    display: none;
+}
+
 .reactions {
     gap: 8px;
     display: flex;
@@ -259,3 +263,50 @@ body {
 .show-reactions-btn:hover {
     transform: scale(1.1);
 }
+
+.reactions-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 20px;
+    border-radius: 50px;
+    backdrop-filter: blur(10px);
+}
+
+.reaction-btn {
+    font-size: 40px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s;
+    padding: 10px;
+    line-height: 1;
+}
+
+.reaction-btn:hover {
+    transform: scale(1.2);
+}
+
+.flying-reaction {
+    position: fixed;
+    font-size: 50px;
+    animation: fly 2s ease-out forwards;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+@keyframes fly {
+    0% {
+        transform: translate(-50%, 0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -200px) scale(1.5);
+        opacity: 0;
+    }
+}
+
